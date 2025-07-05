@@ -50,6 +50,24 @@
             gap: 20px;
         }
 
+        .local-screen-preview {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 30%;
+            max-width: 300px;
+            border: 2px solid #4285f4;
+            border-radius: 8px;
+            overflow: hidden;
+            z-index: 10;
+            background: #000;
+        }
+
+        .local-screen-preview video {
+            width: 100%;
+            height: auto;
+        }
+
         .video-section {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -359,6 +377,9 @@
                 <div class="video-container active" id="localVideoContainer">
                     <video id="localVideo" autoplay muted playsinline></video>
                     <div class="video-label">You</div>
+                    <div class="local-screen-preview hidden" id="localScreenPreview">
+                        <video id="localScreen" autoplay muted playsinline></video>
+                    </div>
                     <div class="status-indicator" id="localStatus"></div>
                 </div>
                 <div class="video-container" id="remoteVideoContainer">
@@ -781,6 +802,23 @@
                 joinBtn.disabled = false;
             }
         }
+        async function replaceStreamTracks(newStream) {
+            if (peerConnection) {
+                const senders = peerConnection.getSenders();
+
+                // Replace video track
+                const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+                if (videoSender && newStream.getVideoTracks().length > 0) {
+                    await videoSender.replaceTrack(newStream.getVideoTracks()[0]);
+                }
+
+                // Replace audio track if needed
+                const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
+                if (audioSender && newStream.getAudioTracks().length > 0) {
+                    await audioSender.replaceTrack(newStream.getAudioTracks()[0]);
+                }
+            }
+        }
 
         // Start polling for ICE candidates
         function startIcePolling() {
@@ -829,12 +867,14 @@
                     screenShareBtn.style.background = '#ea4335';
                     updateStatus('Screen sharing started', 'success');
 
+                    // Show local preview of screen share
+                    localVideo.srcObject = screenStream;
+
                     screenStream.getVideoTracks()[0].onended = () => {
                         stopScreenSharing();
                     };
 
                     await replaceStreamTracks(screenStream);
-
                 } else {
                     stopScreenSharing();
                 }
@@ -856,11 +896,12 @@
             screenShareBtn.style.background = '#5f6368';
             updateStatus('Screen sharing stopped', 'status');
 
+            // Restore local camera preview
             if (localStream) {
+                localVideo.srcObject = localStream;
                 await replaceStreamTracks(localStream);
             }
         }
-
         // End the call
         async function endCall() {
             console.log('Ending call...');
